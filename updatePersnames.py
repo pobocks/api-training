@@ -1,4 +1,5 @@
-import requests, csv, json, urllib, time, authenticate
+import requests, csv, json, urllib, time
+from asnake.client import ASnakeClient
 
 viafURL = 'http://viaf.org/viaf/search?query=local.personalNames+%3D+%22'
 
@@ -7,17 +8,35 @@ print('This script queries existing person agent records in ArchivesSpace with t
 input('Press Enter to continue...')
 
 # This is where we connect to ArchivesSpace.  See authenticate.py
-baseURL, headers = authenticate.login()
+client = ASnakeClient()
+client.authorize() # login, using default values
 
 # search AS for person agents with source "viaf"
-query = '/search?page=1&filter={"query":{"jsonmodel_type":"boolean_query","op":"AND","subqueries":[{"jsonmodel_type":"field_query","field":"primary_type","value":"agent_person","literal":true},{"jsonmodel_type":"field_query","field":"source","value":"viaf","literal":true}]}}'
-ASoutput = requests.get(baseURL + query, headers=headers).json()
-print('Found ' + str(len(ASoutput['results'])) + ' agents.')
+query = json.dumps({"query":{
+    "jsonmodel_type":"boolean_query",
+    "op":"AND",
+    "subqueries":[
+        {
+            "jsonmodel_type":"field_query",
+            "field":"primary_type",
+            "value":"agent_person",
+            "literal":True
+        },
+        {
+            "jsonmodel_type":"field_query",
+            "field":"source",
+            "value":"viaf",
+            "literal":True
+        }
+    ]
+}})
+ASoutput = list(requests.get_paged("/search", params={"filter": query}))
+print('Found ' + str(len(ASoutput)) + ' agents.')
 
 # grab uri out of agent
-for person in ASoutput['results']:
+for person in ASoutput:
     uri = person['uri']
-    personRecord = requests.get(baseURL + uri, headers=headers).json()
+    personRecord = client.get(uri).json()
     lockVersion = str(personRecord['lock_version'])
     primary_name = personRecord['names'][0]['primary_name']
     try:
@@ -54,6 +73,21 @@ for person in ASoutput['results']:
     if viafid != '':
         links = json.loads(requests.get('http://viaf.org/viaf/'+viafid+'/justlinks.json').text)
         viafid = 'http://viaf.org/viaf/'+viafid
-    toPost = '{"lock_version": ' + lockVersion + ',"names": [{"primary_name":"' + properPrimary.strip() + '","rest_of_name":"' + properSecondary.strip() + '","dates":"' + properDates.strip() + '","sort_name":"' + properName + '","authorized":true, "is_display_name": true, "source": "viaf", "rules": "dacs", "name_order": "inverted", "jsonmodel_type": "name_person", "authority_id":"' + viafid + '"}]}'
-    post = requests.post(baseURL + uri, headers=headers, data=toPost).json()
+    toPost = {"lock_version": lockVersion,
+              "names": [
+                  {"primary_name": properPrimary.strip(),
+                   "rest_of_name": properSecondary.strip(),
+                   "dates": properDates.strip(),
+                   "sort_name":properName,
+                   "authorized":True,
+                   "is_display_name": True,
+                   "source": "viaf",
+                   "rules": "dacs",
+                   "name_order": "inverted",
+                   "jsonmodel_type": "name_person",
+                   "authority_id": viafid
+                  }
+              ]
+    }
+    post = client.post(uri, json=toPost).json()
     print(post)

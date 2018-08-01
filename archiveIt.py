@@ -1,22 +1,49 @@
-import requests, json, secrets, authenticate, runtime
-
+import requests, json, runtime
+from asnake.client import ASnakeClient
 # provide instructions
 print('This script is used to generate new digital objects within an ArchivesSpace collection for websites crawled in an Archive-It collection.  Please note: This is a "proof of concept" script, NOT completed work.  Do not use in production scenarios.')
 input('Press Enter to continue...')
 
-# This is where we connect to ArchivesSpace.  See authenticate.py
-baseURL, headers = authenticate.login()
+# This is where we connect to ArchivesSpace.
+client = ASnakeClient()
+client.authorize() # login, using default values
 
 # archiveit_coll = raw_input('Enter the Archive-It collection number: ')
 archiveit_coll = '3181'
 
 # search AS for archival_object's with level "Web archive"
-query = '/search?page=1&filter={"query":{"jsonmodel_type":"boolean_query","op":"AND","subqueries":[{"jsonmodel_type":"field_query","field":"primary_type","value":"archival_object","literal":true},{"jsonmodel_type":"field_query","field":"level","value":"Web archive","literal":true},{"jsonmodel_type":"field_query","field":"types","value":"pui","literal":true}]}}'
-ASoutput = requests.get(baseURL + query, headers=headers).json()
-print('Found ' + str(len(ASoutput['results'])) + ' archival objects with the instance type "Web archive."')
+
+warchives = list(client.get_paged(  # get_paged returns an iterator, so wrap in list since we use it multiple times
+    'search',                              # the query URL
+    params={
+        "filter": json.dumps(              # use json.dumps to serialize the query JSON into a string - remember that query is passed as a GET param in the URL
+            {"query":
+             {"jsonmodel_type": "boolean_query",
+              "op":"AND",
+              "subqueries":[
+                  {"jsonmodel_type":"field_query",
+                   "field":"primary_type",
+                   "value":"archival_object",
+                   "literal":true},
+                  {"jsonmodel_type":"field_query",
+                   "field":"level",
+                   "value":"Web archive",
+                   "literal":true},
+                  {"jsonmodel_type":"field_query",
+                   "field":"types",
+                   "value":"pui",
+                   "literal":true}
+              ]
+             }
+            } # end query
+        ) # end json.dumps
+    } # end params
+)) # end list and client.get_paged
+
+print('Found ' + str(len(warchives)) + ' archival objects with the instance type "Web archive."')
 
 # grab needed fields out of ao
-for ao in ASoutput['results']:
+for ao in warchives:
     url = ao['title']
     uri = ao['uri']
 
@@ -28,8 +55,7 @@ for ao in ASoutput['results']:
     # take AI json lists and convert to python dicts
     keys = AIoutput[0]
     crawlList = []
-    for i in range (1, len (AIoutput)):
-        AIlist = AIoutput[i]
+    for AIlist in AIoutput[1:]:
         crawl = {}
         for j in range (0, len(AIlist)):
             crawl[keys[j]] = AIlist[j]
@@ -40,29 +66,47 @@ for ao in ASoutput['results']:
     newInstances = []
     for crawl in crawlList:
         doid = 'https://wayback.archive-it.org' + '/' + archiveit_coll + '/' + crawl['timestamp'] + '/' + crawl['original']
-        query = '/search?page=1&filter={"query":{"jsonmodel_type":"boolean_query","op":"AND","subqueries":[{"jsonmodel_type":"field_query","field":"primary_type","value":"digital_object","literal":true},{"jsonmodel_type":"field_query","field":"digital_object_id","value":"' + doid + '","literal":true}]}}'
-        existingdoID = requests.get(baseURL + query, headers=headers).json()
+        filter_query=json.dumps({
+            "query":{
+                "jsonmodel_type":"boolean_query",
+                "op":"AND",
+                "subqueries":[
+                    {
+                        "jsonmodel_type":"field_query",
+                        "field":"primary_type",
+                        "value":"digital_object",
+                        "literal":True},
+                    {
+                        "jsonmodel_type":"field_query",
+                        "field":"digital_object_id",
+                        "value": str(doid),
+                        "literal":True
+                    }
+                ]
+            }
+        })
+
+        existingdoID = list(client.get_paged(search, params={"filter": filter_query}))
         doPost = {}
-        if len(existingdoID['results']) != 0:
+        if len(existingdoID) != 0:
             print('Digital object already exists.')
         else:
             doPost['digital_object_id'] = doid
             doPost['title'] = 'Web crawl of ' + crawl['original']
             doPost['dates'] = [{'expression': crawl['timestamp'], 'date_type': 'single', 'label': 'creation'}]
             doPost['file_versions'] = [{'file_uri': crawl['filename'], 'checksum': crawl['digest'], 'checksum_method': 'sha-1'}]
-            doJson = json.dumps(doPost)
         if doPost != {}:
-            post = requests.post(baseURL + '/repositories/2/digital_objects', headers=headers, data=doJson).json()
+            post = requests.post('/repositories/2/digital_objects', json=doPost).json()
             print(post)
             doItem = {}
             doItem['digital_object'] = {'ref': post['uri']}
             doItem['instance_type'] = 'digital_object'
             newInstances.append(doItem)
-    aoGet = requests.get(baseURL + uri, headers=headers).json()
+    aoGet = client.get(uri).json()
     existingInstances = aoGet['instances']
     existingInstances = existingInstances + newInstances
     aoGet['instances'] = existingInstances
-    aoUpdate = requests.post(baseURL + uri, headers=headers, data=json.dumps(aoGet)).json()
+    aoUpdate = client.post(uri, json=aoGet).json()
     print('The following archival objects have been updated in ArchivesSpace:')
     print(aoUpdate)
 
