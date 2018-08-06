@@ -1,6 +1,5 @@
 import json
-import requests
-import secrets
+from asnake.client import ASnakeClient
 import time
 
 startTime = time.time()
@@ -14,20 +13,15 @@ def findKey(d, key):
                 for j in findKey(i, key):
                     yield j
 
-baseURL = secrets.baseURL
-user = secrets.user
-password = secrets.password
-repository = secrets.repository
+repository = input('Enter Repository ID: ')
+resourceID= input('Enter resource ID: ')
 
-resourceID= raw_input('Enter resource ID: ')
-
-auth = requests.post(baseURL + '/users/'+user+'/login?password='+password).json()
-session = auth["session"]
-headers = {'X-ArchivesSpace-Session':session, 'Content_Type':'application/json'}
+client = ASnakeClient()
+client.authorize()
 
 endpoint = '/repositories/' + repository + '/resources/' + resourceID + '/tree'
 
-output = requests.get(baseURL + endpoint, headers=headers).json()
+output = client.get(endpoint).json()
 
 archivalObjects = []
 for value in findKey(output, 'record_uri'):
@@ -36,7 +30,7 @@ for value in findKey(output, 'record_uri'):
 
 records = []
 for archivalObject in archivalObjects:
-    output = requests.get(baseURL + archivalObject, headers=headers).json()
+    output = client.get(archivalObject).json()
     records.append(output)
 
 f=open('archivalObjects.json', 'w')
@@ -46,4 +40,4 @@ f.close()
 elapsedTime = time.time() - startTime
 m, s = divmod(elapsedTime, 60)
 h, m = divmod(m, 60)
-print 'Total script run time: ', '%d:%02d:%02d' % (h, m, s)
+print('Total script run time: ', '%d:%02d:%02d' % (h, m, s))
