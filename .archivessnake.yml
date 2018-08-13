@@ -1,0 +1,8 @@
+# This is a YAML configuration file for ArchivesSnake
+# This should be moved to your home directory
+# which you can find by typing `echo $HOME` in a command prompt
+
+# Replace [your#] with the number for your instance
+baseurl: "https://ws[your#].lyrtech.org/staff/api"
+username: "admin"
+password: "admin"
