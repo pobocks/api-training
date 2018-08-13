@@ -1,4 +1,5 @@
-import requests, csv, json, urllib, time
+import requests, csv, json, time
+from urllib.parse import quote
 from asnake.client import ASnakeClient
 
 viafURL = 'http://viaf.org/viaf/search?query=local.personalNames+%3D+%22'
@@ -30,7 +31,7 @@ query = json.dumps({"query":{
         }
     ]
 }})
-ASoutput = list(requests.get_paged("/search", params={"filter": query}))
+ASoutput = list(client.get_paged("/search", params={"filter": query}))
 print('Found ' + str(len(ASoutput)) + ' agents.')
 
 # grab uri out of agent
@@ -48,7 +49,7 @@ for person in ASoutput:
     except:
         dates = ''
     searchName = primary_name + ', ' + secondary_name + ', ' + dates
-    nameEdited = urllib.quote(searchName.strip())
+    nameEdited = quote(searchName.strip())
     url = viafURL+nameEdited+'%22+and+local.sources+%3D+%22lc%22&sortKeys=holdingscount&maximumRecords=1&httpAccept=application/rdf+json'
 	# first need to treat the response as text since we get an xml resopnse (with json embedded inside)
     response = requests.get(url).text

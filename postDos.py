@@ -1,4 +1,5 @@
 import json, csv, os, runtime
+from time import sleep
 from asnake.client import ASnakeClient
 
 # This is where we connect to ArchivesSpace.
@@ -34,7 +35,7 @@ for row in csv_dict:
     # Store uri of newly posted digital objects because we'll need it
     uri = doPost['uri']
     # Find AOs based on refIDs supplied in csv
-    AOquery = json.dumps({
+    AOQuery = json.dumps({
         "query": {
             "jsonmodel_type":"boolean_query",
             "op":"AND",
@@ -59,7 +60,16 @@ for row in csv_dict:
             ]
         }
     })
-    aoSearch = list(client.get_paged('search', params={"filter": AQuery}))
+
+    # it can take some time for the posted DOs to be indexed, so...
+    showed_up_yet = None
+    while not showed_up_yet:
+        aoSearch = list(client.get_paged('search', params={"filter": AOQuery}))
+        if any(aoSearch):
+            showed_up_yet = True
+        else:
+            print("DOs not present in search yet, waiting a second for the indexer to catch up")
+            sleep(1)
     linked_ao_uri = aoSearch[0]['uri']
     # Get and store archival objects from above search
     aoRecord = client.get(linked_ao_uri).json()

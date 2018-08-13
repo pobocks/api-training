@@ -24,15 +24,15 @@ warchives = list(client.get_paged(  # get_paged returns an iterator, so wrap in 
                   {"jsonmodel_type":"field_query",
                    "field":"primary_type",
                    "value":"archival_object",
-                   "literal":true},
+                   "literal":True},
                   {"jsonmodel_type":"field_query",
                    "field":"level",
                    "value":"Web archive",
-                   "literal":true},
+                   "literal":True},
                   {"jsonmodel_type":"field_query",
                    "field":"types",
                    "value":"pui",
-                   "literal":true}
+                   "literal":True}
               ]
              }
             } # end query
@@ -86,7 +86,7 @@ for ao in warchives:
             }
         })
 
-        existingdoID = list(client.get_paged(search, params={"filter": filter_query}))
+        existingdoID = list(client.get_paged('search', params={"filter": filter_query}))
         doPost = {}
         if len(existingdoID) != 0:
             print('Digital object already exists.')
@@ -96,7 +96,7 @@ for ao in warchives:
             doPost['dates'] = [{'expression': crawl['timestamp'], 'date_type': 'single', 'label': 'creation'}]
             doPost['file_versions'] = [{'file_uri': crawl['filename'], 'checksum': crawl['digest'], 'checksum_method': 'sha-1'}]
         if doPost != {}:
-            post = requests.post('/repositories/2/digital_objects', json=doPost).json()
+            post = client.post('/repositories/2/digital_objects', json=doPost).json()
             print(post)
             doItem = {}
             doItem['digital_object'] = {'ref': post['uri']}
