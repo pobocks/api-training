@@ -35,7 +35,8 @@ advanced_query = json.dumps({
         "value": "/repositories/2/resources/" + resource_id,
         "jsonmodel_type":"field_query"}
 })
-results = list(client.get_paged(endpoint, params={'aq': advanced_query}))
+# Can't use get_paged because this endpoint returns raw Solr
+results = client.get(endpoint, params={'aq': advanced_query}).json()["response"]["docs"]
 
 # populate top_containers with the ids of each top_container in search results
 top_containers = []
